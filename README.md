@@ -16,16 +16,6 @@
 -   Play and download generated videos.
 -   Cut videos directly in the browser to a specific time range.
 
-## Project Structure
-
-The project is a standard Next.js application with the following key directories:
-
--   `app/`: Contains the main application logic, including the user interface and API routes.
-    -   `api/`: API routes for generating videos and images, and checking operation status.
--   `components/`: Reusable React components used throughout the application.
--   `lib/`: Utility functions and schema definitions.
--   `public/`: Static assets.
-
 ## Getting Started: Development and Local Testing
 
 Follow these steps to get the application running locally for development and testing.
@@ -51,6 +41,16 @@ npm run dev
 ```
 
 Open your browser and navigate to `http://localhost:3000` to see the application.
+
+## Project Structure
+
+The project is a standard Next.js application with the following key directories:
+
+-   `app/`: Contains the main application logic, including the user interface and API routes.
+    -   `api/`: API routes for generating videos and images, and checking operation status.
+-   `components/`: Reusable React components used throughout the application.
+-   `lib/`: Utility functions and schema definitions.
+-   `public/`: Static assets.
 
 ## Official Docs and Resources
 
