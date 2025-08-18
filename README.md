@@ -1,4 +1,4 @@
-# Veo 3 Gemini API Studio Quickstart
+# Veo 3 Gemini API Quickstart
 
 [Veo 3](https://ai.google.dev/gemini-api/docs/video) is Google's state-of-the-art video generation model available in the Gemini API. This repository is a quickstart that demonstrates how to build a simple UI to generate videos with Veo 3, play them, and download the results. It also includes an image + text to video generation using the [Imagen 4](https://ai.google.dev/gemini-api/docs/imagen) model.
 

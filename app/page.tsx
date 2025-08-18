@@ -230,7 +230,7 @@ const VeoStudio: React.FC = () => {
     <div className="relative min-h-screen w-full text-stone-900">
       <div className="absolute top-4 left-4 z-20 hidden md:block">
         <h1 className="text-lg font-semibold text-slate-900/80 backdrop-blur-sm bg-white/20 px-3 py-1 rounded-lg">
-          Google Veo 3 Studio
+          Veo 3
         </h1>
       </div>
       {/* Center hint or video */}
