@@ -106,6 +106,13 @@ const Composer: React.FC<ComposerProps> = ({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const multipleFileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      startGeneration();
+    }
+  };
+
   const handleOpenFileDialog = () => {
     fileInputRef.current?.click();
   };
@@ -200,6 +207,7 @@ const Composer: React.FC<ComposerProps> = ({
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Generate a video with text and frames..."
             className="w-full bg-transparent focus:outline-none resize-none text-base font-normal placeholder-slate-800/60"
             rows={2}
@@ -210,6 +218,7 @@ const Composer: React.FC<ComposerProps> = ({
           <textarea
             value={imagePrompt}
             onChange={(e) => setImagePrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Describe the image to create..."
             className="w-full bg-transparent focus:outline-none resize-none text-base font-normal placeholder-slate-800/60"
             rows={2}
@@ -220,6 +229,7 @@ const Composer: React.FC<ComposerProps> = ({
           <textarea
             value={editPrompt}
             onChange={(e) => setEditPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Describe how to edit the image..."
             className="w-full bg-transparent focus:outline-none resize-none text-base font-normal placeholder-slate-800/60"
             rows={2}
@@ -230,6 +240,7 @@ const Composer: React.FC<ComposerProps> = ({
           <textarea
             value={composePrompt}
             onChange={(e) => setComposePrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Describe how to combine the images..."
             className="w-full bg-transparent focus:outline-none resize-none text-base font-normal placeholder-slate-800/60"
             rows={2}
