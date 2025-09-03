@@ -129,6 +129,12 @@
   }
 }
 
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 
 body {
   color: var(--foreground);

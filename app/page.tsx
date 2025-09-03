@@ -7,9 +7,11 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Clock, Upload, Download } from "lucide-react";
+import Image from "next/image";
+import { Upload, Film, Image as ImageIcon } from "lucide-react";
 import Composer from "@/components/ui/Composer";
 import VideoPlayer from "@/components/ui/VideoPlayer";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type VeoOperationName = string | null;
 
@@ -44,7 +46,7 @@ const VeoStudio: React.FC = () => {
         setSelectedModel("gemini-2.5-flash-image-preview");
       }
     }
-  }, [mode]);
+  }, [mode, selectedModel]);
 
   // Image generation prompts
   const [imagePrompt, setImagePrompt] = useState("");
@@ -88,10 +90,82 @@ const VeoStudio: React.FC = () => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const videoBlobRef = useRef<Blob | null>(null);
   const trimmedBlobRef = useRef<Blob | null>(null);
-  const [trimmedVideoUrl, setTrimmedVideoUrl] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
+
   const trimmedUrlRef = useRef<string | null>(null);
   const originalVideoUrlRef = useRef<string | null>(null);
+
+  // Friendly model label for UI
+  const modelLabel = useMemo(() => {
+    const cleaned = selectedModel
+      .replace(/_/g, " ")
+      .replace(/-/g, " ")
+      .replace(/preview/gi, "")
+      .trim();
+    return cleaned || selectedModel;
+  }, [selectedModel]);
+
+  // Rotating loading messages containing model name
+  const loadingMessages = useMemo(() => {
+    if (mode === "create-video") {
+      return [
+        `${modelLabel} is crafting your idea...`,
+        "Generating keyframes and motion...",
+        "Enhancing detail and lighting...",
+        "Color grading and encoding...",
+        "Almost there...",
+        "One more step...",
+        "Kidding, this takes a while...",
+        "Haha sorry",
+        "Did you know? That Trees are the second most photographed object in the world after the Sun.",
+        "That's why we need to make sure your video is perfect.",
+        "We're working on it...",
+        "Hang on a sec...",
+        "Almost done...",
+        "One more step...",
+        "Kidding, this takes a while...",
+        "Haha sorry",
+        "So How are you doing?",
+        "Crazy what progress can be made in a few seconds?",
+        "Let me check on it...",
+        "Okay almost done...",
+      ];
+    }
+    return [
+      `${modelLabel} is crafting your image...`,
+      "Composing layout and subject...",
+      "Applying style and color...",
+      "Refining edges and textures...",
+      "Almost there...",
+      "One more step...",
+      "Kidding, this takes a while...",
+      "Haha sorry",
+      "So How are you doing?",
+      "Crazy what progress can be made in a few seconds?",
+      "Let me check on it...",
+      "Okay almost done...",
+      "I promise I'm working on it...",
+    ];
+  }, [mode, modelLabel]);
+
+  const [loadingIndex, setLoadingIndex] = useState(0);
+
+  // Single flag for whether we are actively generating
+  const isLoadingUI = useMemo(
+    () => isGenerating || imagenBusy || geminiBusy,
+    [isGenerating, imagenBusy, geminiBusy]
+  );
+
+  // Advance loading message while any generation is happening
+  useEffect(() => {
+    if (!isLoadingUI) {
+      setLoadingIndex(0);
+      return;
+    }
+    const id = setInterval(() => {
+      setLoadingIndex((i) => (i + 1) % loadingMessages.length);
+    }, 2200);
+    return () => clearInterval(id);
+  }, [isLoadingUI, loadingMessages]);
 
   const canStart = useMemo(() => {
     if (mode === "create-video") {
@@ -581,17 +655,24 @@ const VeoStudio: React.FC = () => {
       {/* Main content area */}
       <div className="flex flex-col items-center justify-center min-h-screen pb-40 px-4">
         {!videoUrl &&
-          (!generatedImage || mode === "compose-image") &&
-          (isGenerating || imagenBusy || geminiBusy ? (
-            <div className="text-stone-700 select-none inline-flex items-center gap-2">
-              <Clock className="w-4 h-4 animate-spin" />
-              {isGenerating
-                ? "Generating Video..."
-                : imagenBusy
-                ? "Generating Image with Imagen..."
-                : geminiBusy
-                ? "Generating with Gemini..."
-                : "Generating..."}
+          (isLoadingUI ? (
+            <div className="w-full max-w-3xl">
+              <div className="flex flex-col items-center justify-center gap-3 text-center px-4">
+                {mode === "create-video" ? (
+                  <Film className="w-16 h-16 text-gray-400 animate-pulse" />
+                ) : (
+                  <ImageIcon className="w-16 h-16 text-gray-400 animate-pulse" />
+                )}
+                <div className="inline-flex items-center rounded-full bg-gray-200/70 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
+                  {modelLabel}
+                </div>
+                <div className="text-xs text-gray-600 dark:text-gray-300">
+                  {loadingMessages[loadingIndex % loadingMessages.length]}
+                </div>
+                <div className="mt-2 h-1 w-48 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                  <div className="h-full w-full animate-[shimmer_1.6s_infinite] -translate-x-full rounded-full bg-gray-400/70 dark:bg-gray-500/70" />
+                </div>
+              </div>
             </div>
           ) : (
             <div className="w-full max-w-3xl">
@@ -636,10 +717,12 @@ const VeoStudio: React.FC = () => {
 
               {mode === "edit-image" && imageFile && uploadedImageUrl && (
                 <div className="w-full max-w-4xl aspect-video overflow-hidden rounded-lg border relative mx-auto">
-                  <img
+                  <Image
                     src={uploadedImageUrl}
                     alt="Uploaded for editing"
                     className="w-full h-full object-contain"
+                    width={800}
+                    height={450}
                   />
                 </div>
               )}
@@ -731,10 +814,12 @@ const VeoStudio: React.FC = () => {
                               className="w-28 h-28 rounded-lg overflow-hidden border-2 border-white/30 shadow-md"
                               title={file.name}
                             >
-                              <img
+                              <Image
                                 src={URL.createObjectURL(file)}
                                 alt={`Preview ${index + 1}`}
                                 className="w-full h-full object-cover"
+                                width={112}
+                                height={112}
                               />
                             </div>
                           ))}
@@ -754,10 +839,12 @@ const VeoStudio: React.FC = () => {
               <div className="flex flex-col gap-6 items-center">
                 <div className="w-full max-w-2xl relative">
                   <div className="aspect-video overflow-hidden rounded-lg border">
-                    <img
+                    <Image
                       src={generatedImage}
                       alt="Generated"
                       className="w-full h-full object-contain"
+                      width={800}
+                      height={450}
                     />
                   </div>
                 </div>
@@ -806,10 +893,12 @@ const VeoStudio: React.FC = () => {
                             className="w-20 h-20 rounded-lg overflow-hidden border-2 border-white/30 shadow-sm"
                             title={file.name}
                           >
-                            <img
+                            <Image
                               src={URL.createObjectURL(file)}
                               alt={`Preview ${index + 1}`}
                               className="w-full h-full object-cover"
+                              width={80}
+                              height={80}
                             />
                           </div>
                         ))}
@@ -822,10 +911,12 @@ const VeoStudio: React.FC = () => {
               /* Other modes: Image centered */
               <div className="flex flex-col items-center gap-6">
                 <div className="w-full max-w-4xl aspect-video overflow-hidden rounded-lg border relative">
-                  <img
+                  <Image
                     src={generatedImage}
                     alt="Generated"
                     className="w-full h-full object-contain"
+                    width={800}
+                    height={450}
                   />
                 </div>
               </div>
@@ -866,15 +957,7 @@ const VeoStudio: React.FC = () => {
         setEditPrompt={setEditPrompt}
         composePrompt={composePrompt}
         setComposePrompt={setComposePrompt}
-        imagenBusy={imagenBusy}
         geminiBusy={geminiBusy}
-        onPickImage={onPickImage}
-        onPickMultipleImages={onPickMultipleImages}
-        generateWithImagen={generateWithImagen}
-        generateWithGemini={generateWithGemini}
-        imageFile={imageFile}
-        multipleImageFiles={multipleImageFiles}
-        generatedImage={generatedImage}
         resetAll={resetAll}
         downloadImage={downloadImage}
       />

@@ -2,11 +2,7 @@
 
 import React from "react";
 import {
-  Upload,
-  Wand2,
-  Plus,
   ArrowRight,
-  Loader2,
   RotateCcw,
   Image,
   Edit,
@@ -14,19 +10,12 @@ import {
   Video,
   Download,
 } from "lucide-react";
-import NextImage from "next/image";
 import ModelSelector from "@/components/ui/ModelSelector";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import Dropzone from "./dropzone";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UploadCloudIcon } from "lucide-react";
 
 type StudioMode =
   | "create-image"
@@ -57,16 +46,7 @@ interface ComposerProps {
   composePrompt: string;
   setComposePrompt: (value: string) => void;
 
-  imagenBusy: boolean;
   geminiBusy: boolean;
-  onPickImage: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onPickMultipleImages: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  generateWithImagen: () => Promise<void> | void;
-  generateWithGemini: () => Promise<void> | void;
-
-  imageFile: File | null;
-  multipleImageFiles: File[];
-  generatedImage: string | null;
 
   resetAll: () => void;
   downloadImage: () => void;
@@ -91,47 +71,14 @@ const Composer: React.FC<ComposerProps> = ({
   setEditPrompt,
   composePrompt,
   setComposePrompt,
-  imagenBusy,
   geminiBusy,
-  onPickImage,
-  onPickMultipleImages,
-  generateWithImagen,
-  generateWithGemini,
-  imageFile,
-  multipleImageFiles,
-  generatedImage,
   resetAll,
   downloadImage,
 }) => {
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const multipleFileInputRef = React.useRef<HTMLInputElement>(null);
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       startGeneration();
-    }
-  };
-
-  const handleOpenFileDialog = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleOpenMultipleFileDialog = () => {
-    multipleFileInputRef.current?.click();
-  };
-
-  const handleDrop = (files: File[]) => {
-    if (files && files.length > 0) {
-      if (mode === "compose-image") {
-        onPickMultipleImages({
-          target: { files: files as any },
-        } as unknown as React.ChangeEvent<HTMLInputElement>);
-      } else {
-        onPickImage({
-          target: { files: files as any },
-        } as unknown as React.ChangeEvent<HTMLInputElement>);
-      }
     }
   };
 
@@ -301,7 +248,7 @@ const Composer: React.FC<ComposerProps> = ({
                     : "text-slate-700 hover:bg-white/30 hover:text-slate-900"
                 }`}
               >
-                <Image className="w-4 h-4" />
+                <Image className="w-4 h-4" aria-hidden="true" />
                 {getTabText("create-image")}
               </button>
             </TooltipTrigger>

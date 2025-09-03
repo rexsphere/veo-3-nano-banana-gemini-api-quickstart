@@ -37,7 +37,10 @@ export async function POST(req: Request) {
       }))
     );
 
-    const contents: any[] = [];
+    const contents: (
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string } }
+    )[] = [];
 
     // Add the prompt as text
     contents.push({ text: prompt });

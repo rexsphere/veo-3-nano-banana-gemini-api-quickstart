@@ -1,8 +1,26 @@
 # Gemini API Veo 3 & Nano Banana Quickstart
 
-A comprehensive AI-powered quickstart for creating and editing images and videos using Google's latest Gemini API models including [Veo 3](https://ai.google.dev/gemini-api/docs/video), [Imagen 4](https://ai.google.dev/gemini-api/docs/imagen), and [Gemini 2.5 Flash Image Preview aka nano banana](https://ai.google.dev/gemini-api/docs/gemini). 
+A NextJs quickstart for creating and editing images and videos using Google's latest Gemini API models including [Veo 3](https://ai.google.dev/gemini-api/docs/video), [Imagen 4](https://ai.google.dev/gemini-api/docs/imagen), and [Gemini 2.5 Flash Image Preview aka nano banana](https://ai.google.dev/gemini-api/docs/image-generations). 
 
-![Example](./public/example.png)
+<table>
+  <tr>
+    <td align="center">
+      <img src="./public/compose.png" alt="Compose" width="300"/>
+      <br/>
+      <strong>Compose</strong>
+    </td>
+    <td align="center">
+      <img src="./public/edit.png" alt="Edit" width="300"/>
+      <br/>
+      <strong>Edit</strong>
+    </td>
+    <td align="center">
+      <img src="./public/video.png" alt="Video" width="300"/>
+      <br/>
+      <strong>Video</strong>
+    </td>
+  </tr>
+</table>
 
 > [!NOTE]
 > If you want a full studio, consider [Google's Flow](https://labs.google/fx/tools/flow) (a professional environment for Veo/Imagen). Use this repo as a lightweight studio to learn how to build your own UI that generates content with Google's AI models via the Gemini API.

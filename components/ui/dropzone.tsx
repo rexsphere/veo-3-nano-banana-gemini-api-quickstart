@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { UploadCloudIcon } from "lucide-react";
 import React, { useCallback } from "react";
-import { useDropzone, type DropzoneProps } from "react-dropzone";
+import { useDropzone } from "react-dropzone";
 import { TooltipProvider } from "./tooltip";
 
 type DropzoneComponentProps = {
