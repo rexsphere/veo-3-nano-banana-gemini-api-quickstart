@@ -21,8 +21,8 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
   const getModelsForMode = (currentMode: StudioMode) => {
     if (currentMode === "create-video") {
       return [
-        "veo-3.0-generate-preview",
-        "veo-3.0-fast-generate-preview",
+        "veo-3.0-generate-001",
+        "veo-3.0-fast-generate-001",
         "veo-2.0-generate-001",
       ];
     } else {

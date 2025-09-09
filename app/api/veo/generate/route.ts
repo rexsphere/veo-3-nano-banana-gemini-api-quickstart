@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const form = await req.formData();
 
     const prompt = (form.get("prompt") as string) || "";
-    const model = (form.get("model") as string) || "veo-3.0-generate-preview";
+    const model = (form.get("model") as string) || "veo-3.0-generate-001";
     const negativePrompt = (form.get("negativePrompt") as string) || undefined;
     const aspectRatio = (form.get("aspectRatio") as string) || undefined;
 
