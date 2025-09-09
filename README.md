@@ -1,6 +1,6 @@
 # Gemini API Veo 3 & Nano Banana Quickstart
 
-A NextJs quickstart for creating and editing images and videos using Google's latest Gemini API models including [Veo 3](https://ai.google.dev/gemini-api/docs/video), [Imagen 4](https://ai.google.dev/gemini-api/docs/imagen), and [Gemini 2.5 Flash Image Preview aka nano banana](https://ai.google.dev/gemini-api/docs/image-generations). 
+A NextJs quickstart for creating and editing images and videos using Google's latest Gemini API models including [Veo 3](https://ai.google.dev/gemini-api/docs/video), [Imagen 4](https://ai.google.dev/gemini-api/docs/imagen), and [Gemini 2.5 Flash Image aka nano banana](https://ai.google.dev/gemini-api/docs/image-generations). 
 
 <table>
   <tr>
