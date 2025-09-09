@@ -33,7 +33,7 @@ The quickstart provides a unified composer UI with different modes for content c
 
 -   **Create Image**: Generate images from text prompts using **Imagen 4** or **Gemini 2.5 Flash Image**.
 -   **Edit Image**: Edit an image based on a text prompt using **Gemini 2.5 Flash Image**.
--   **Compose Image**: Combine multiple images with a text prompt to create a new image using **Gemini 2.5 Flash**.
+-   **Compose Image**: Combine multiple images with a text prompt to create a new image using **Gemini 2.5 Flash Image**.
 -   **Create Video**: Generate videos from text prompts or an initial image using **Veo 3**.
 
 ### Quick Actions & UI Features
