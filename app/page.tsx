@@ -674,8 +674,8 @@ const VeoStudio: React.FC = () => {
             </div>
           ) : (
             <div className="w-full max-w-3xl">
-              {((mode === "edit-image" && !imageFile) ||
-                mode === "create-video") && (
+              {((mode === "edit-image" && !imageFile && !generatedImage) ||
+                (mode === "create-video" && !imageFile && !generatedImage)) && (
                 <div
                   className={`rounded-lg border-2 border-dashed p-8 cursor-pointer transition-colors ${"bg-white/10 border-gray-300/70 hover:bg-white/30"}`}
                   onClick={() => {
@@ -830,13 +830,87 @@ const VeoStudio: React.FC = () => {
             </div>
           ))}
 
-        {generatedImage && !videoUrl && (
-          <div className="w-full max-w-5xl mx-auto">
-            {mode === "compose-image" ? (
-              /* Compose mode: Image on top, upload area below */
-              <div className="flex flex-col gap-6 items-center">
-                <div className="w-full max-w-2xl relative">
-                  <div className="aspect-video overflow-hidden rounded-lg border">
+        {generatedImage &&
+          !videoUrl &&
+          !(mode === "create-video" && isLoadingUI) && (
+            <div className="w-full max-w-5xl mx-auto">
+              {mode === "compose-image" ? (
+                /* Compose mode: Image on top, upload area below */
+                <div className="flex flex-col gap-6 items-center">
+                  <div className="w-full max-w-2xl relative">
+                    <div className="aspect-video overflow-hidden rounded-lg border">
+                      <Image
+                        src={generatedImage}
+                        alt="Generated"
+                        className="w-full h-full object-contain"
+                        width={800}
+                        height={450}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-4 w-full max-w-md">
+                    <h4 className="text-sm font-medium text-slate-700 text-center">
+                      Add More Images to Compose
+                    </h4>
+                    {/* Status indicator */}
+                    <div className="text-xs text-center -mt-2 mb-2">
+                      {(imageFile || generatedImage) && (
+                        <div className="text-blue-600">
+                          ✓ Existing image will be included
+                        </div>
+                      )}
+                    </div>
+                    <div
+                      className="rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors bg-white/10 border-gray-300/70 hover:bg-white/30"
+                      onClick={() => {
+                        const input = document.getElementById(
+                          "multiple-image-input"
+                        ) as HTMLInputElement;
+                        input?.click();
+                      }}
+                    >
+                      <div className="flex flex-col items-center gap-2 text-slate-800/80">
+                        <Upload className="w-6 h-6" />
+                        <div className="text-center">
+                          <div className="font-medium text-sm">
+                            Drop images here or click to add
+                          </div>
+                          <div className="text-xs opacity-80">
+                            PNG, JPG, WEBP up to 10MB each
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Show thumbnails of additional images */}
+                    {multipleImageFiles.length > 0 && (
+                      <div className="mt-4">
+                        <div className="flex flex-wrap gap-2 justify-center max-w-xs mx-auto">
+                          {multipleImageFiles.map((file, index) => (
+                            <div
+                              key={index}
+                              className="w-20 h-20 rounded-lg overflow-hidden border-2 border-white/30 shadow-sm"
+                              title={file.name}
+                            >
+                              <Image
+                                src={URL.createObjectURL(file)}
+                                alt={`Preview ${index + 1}`}
+                                className="w-full h-full object-cover"
+                                width={80}
+                                height={80}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Other modes: Image centered */
+                <div className="flex flex-col items-center gap-6">
+                  <div className="w-full max-w-4xl aspect-video overflow-hidden rounded-lg border relative">
                     <Image
                       src={generatedImage}
                       alt="Generated"
@@ -846,81 +920,9 @@ const VeoStudio: React.FC = () => {
                     />
                   </div>
                 </div>
-
-                <div className="flex flex-col gap-4 w-full max-w-md">
-                  <h4 className="text-sm font-medium text-slate-700 text-center">
-                    Add More Images to Compose
-                  </h4>
-                  {/* Status indicator */}
-                  <div className="text-xs text-center -mt-2 mb-2">
-                    {(imageFile || generatedImage) && (
-                      <div className="text-blue-600">
-                        ✓ Existing image will be included
-                      </div>
-                    )}
-                  </div>
-                  <div
-                    className="rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors bg-white/10 border-gray-300/70 hover:bg-white/30"
-                    onClick={() => {
-                      const input = document.getElementById(
-                        "multiple-image-input"
-                      ) as HTMLInputElement;
-                      input?.click();
-                    }}
-                  >
-                    <div className="flex flex-col items-center gap-2 text-slate-800/80">
-                      <Upload className="w-6 h-6" />
-                      <div className="text-center">
-                        <div className="font-medium text-sm">
-                          Drop images here or click to add
-                        </div>
-                        <div className="text-xs opacity-80">
-                          PNG, JPG, WEBP up to 10MB each
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Show thumbnails of additional images */}
-                  {multipleImageFiles.length > 0 && (
-                    <div className="mt-4">
-                      <div className="flex flex-wrap gap-2 justify-center max-w-xs mx-auto">
-                        {multipleImageFiles.map((file, index) => (
-                          <div
-                            key={index}
-                            className="w-20 h-20 rounded-lg overflow-hidden border-2 border-white/30 shadow-sm"
-                            title={file.name}
-                          >
-                            <Image
-                              src={URL.createObjectURL(file)}
-                              alt={`Preview ${index + 1}`}
-                              className="w-full h-full object-cover"
-                              width={80}
-                              height={80}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* Other modes: Image centered */
-              <div className="flex flex-col items-center gap-6">
-                <div className="w-full max-w-4xl aspect-video overflow-hidden rounded-lg border relative">
-                  <Image
-                    src={generatedImage}
-                    alt="Generated"
-                    className="w-full h-full object-contain"
-                    width={800}
-                    height={450}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
         {videoUrl && (
           <div className="w-full max-w-3xl mx-auto">
