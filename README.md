@@ -101,7 +101,7 @@ The application uses the following API routes to interact with the Google models
 
 ### Image APIs
 -   `app/api/imagen/generate/route.ts`: Handles image generation requests with Imagen 4
--   `app/api/gemini/generate/route.ts`: Handles image generation requests with Gemini 2.5 Flash
+-   `app/api/gemini/generate/route.ts`: Handles image generation requests with Gemini 2.5 Flash Image
 -   `app/api/gemini/edit/route.ts`: Handles image editing and composition with Gemini 2.5 Flash (supports multiple images)
 
 ### Video APIs
