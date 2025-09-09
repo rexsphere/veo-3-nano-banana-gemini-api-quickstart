@@ -52,7 +52,7 @@ Follow these steps to get the application running locally for development and te
 -   **`GEMINI_API_KEY`**: The application requires a [GEMINI API key](https://aistudio.google.com/app/apikey). Either create a `.env` file in the project root and add your API key: `GEMINI_API_KEY="YOUR_API_KEY"` or set the environment variable in your system.
 
 > [!WARNING]  
-> Google Veo 3, Imagen 4, and Gemini 2.5 Flash are part of the Gemini API Paid tier. You will need to be on the paid tier to use these models.
+> Google Veo 3, Imagen 4, and Gemini 2.5 Flash Image are part of the Gemini API Paid tier. You will need to be on the paid tier to use these models.
 
 **2. Install Dependencies:**
 
