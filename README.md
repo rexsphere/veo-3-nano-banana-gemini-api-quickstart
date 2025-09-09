@@ -76,7 +76,7 @@ The project is a standard Next.js application with the following key directories
     -   `page.tsx`: Main page with the unified composer UI.
     -   `api/`: API routes for different operations
         -   `imagen/generate/`: Image generation with Imagen 4
-        -   `gemini/generate/`: Image generation with Gemini 2.5 Flash
+        -   `gemini/generate/`: Image generation with Gemini 2.5 Flash Image
         -   `gemini/edit/`: Image editing/composition with Gemini 2.5 Flash Image
         -   `veo/generate/`: Video generation operations
         -   `veo/operation/`: Check video generation status
