@@ -2,13 +2,13 @@
 
 import React from "react";
 import {
-  ArrowRight,
   RotateCcw,
   Image,
   Edit,
   Palette,
   Video,
   Download,
+  Sparkles,
 } from "lucide-react";
 import ModelSelector from "@/components/ui/ModelSelector";
 import {
@@ -226,7 +226,7 @@ const Composer: React.FC<ComposerProps> = ({
             {isGenerating || geminiBusy ? (
               <div className="w-4 h-4 border-2 border-t-transparent border-black rounded-full animate-spin" />
             ) : (
-              <ArrowRight className="w-5 h-5 text-black" />
+              <Sparkles className="w-5 h-5 text-black" />
             )}
           </button>
         </div>
