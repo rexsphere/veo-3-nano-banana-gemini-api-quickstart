@@ -9,9 +9,10 @@ import React, {
 } from "react";
 import Image from "next/image";
 import { Upload, Film, Image as ImageIcon } from "lucide-react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import Composer from "@/components/ui/Composer";
 import VideoPlayer from "@/components/ui/VideoPlayer";
-import { Skeleton } from "@/components/ui/skeleton";
 
 type VeoOperationName = string | null;
 
@@ -24,6 +25,7 @@ type StudioMode =
 const POLL_INTERVAL_MS = 5000;
 
 const VeoStudio: React.FC = () => {
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const [mode, setMode] = useState<StudioMode>("create-image");
   const [prompt, setPrompt] = useState(""); // Video or image prompt
   const [negativePrompt, setNegativePrompt] = useState("");
@@ -45,6 +47,25 @@ const VeoStudio: React.FC = () => {
       }
     }
   }, [mode, selectedModel]);
+
+  // Listen for auth state changes and get ID token
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const token = await user.getIdToken();
+          setAuthToken(token);
+        } catch (error) {
+          console.error('Error getting ID token:', error);
+          setAuthToken(null);
+        }
+      } else {
+        setAuthToken(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Image generation prompts
   const [imagePrompt, setImagePrompt] = useState("");
@@ -226,13 +247,21 @@ const VeoStudio: React.FC = () => {
 
   // Imagen helper
   const generateWithImagen = useCallback(async () => {
+    if (!authToken) {
+      alert("Please sign in to use this feature");
+      return;
+    }
+
     console.log("Starting Imagen generation");
     setImagenBusy(true);
     setGeneratedImage(null);
     try {
       const resp = await fetch("/api/imagen/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`,
+        },
         body: JSON.stringify({ prompt: imagePrompt }),
       });
 
@@ -258,17 +287,25 @@ const VeoStudio: React.FC = () => {
       console.log("Resetting Imagen busy state");
       setImagenBusy(false);
     }
-  }, [imagePrompt]);
+  }, [imagePrompt, authToken]);
 
   // Gemini image generation helper
   const generateWithGemini = useCallback(async () => {
+    if (!authToken) {
+      alert("Please sign in to use this feature");
+      return;
+    }
+
     console.log("Starting Gemini image generation");
     setGeminiBusy(true);
     setGeneratedImage(null);
     try {
       const resp = await fetch("/api/gemini/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`,
+        },
         body: JSON.stringify({ prompt: imagePrompt }),
       });
 
@@ -295,10 +332,15 @@ const VeoStudio: React.FC = () => {
       console.log("Resetting Gemini busy state");
       setGeminiBusy(false);
     }
-  }, [imagePrompt]);
+  }, [imagePrompt, authToken]);
 
   // Gemini image edit helper
   const editWithGemini = useCallback(async () => {
+    if (!authToken) {
+      alert("Please sign in to use this feature");
+      return;
+    }
+
     console.log("Starting Gemini image edit");
     setGeminiBusy(true);
     setGeneratedImage(null);
@@ -317,6 +359,9 @@ const VeoStudio: React.FC = () => {
 
       const resp = await fetch("/api/gemini/edit", {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${authToken}`,
+        },
         body: form,
       });
 
@@ -342,10 +387,15 @@ const VeoStudio: React.FC = () => {
       console.log("Resetting Gemini busy state after edit");
       setGeminiBusy(false);
     }
-  }, [editPrompt, imageFile, generatedImage]);
+  }, [editPrompt, imageFile, generatedImage, authToken]);
 
   // Gemini image compose helper
   const composeWithGemini = useCallback(async () => {
+    if (!authToken) {
+      alert("Please sign in to use this feature");
+      return;
+    }
+
     setGeminiBusy(true);
     setGeneratedImage(null);
     try {
@@ -381,6 +431,9 @@ const VeoStudio: React.FC = () => {
 
       const resp = await fetch("/api/gemini/edit", {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${authToken}`,
+        },
         body: form,
       });
 
@@ -410,13 +463,18 @@ const VeoStudio: React.FC = () => {
       console.log("Resetting Gemini busy state after compose");
       setGeminiBusy(false);
     }
-  }, [composePrompt, multipleImageFiles, imageFile, generatedImage]);
+  }, [composePrompt, multipleImageFiles, imageFile, generatedImage, authToken]);
 
   // Start generation based on current mode
   const startGeneration = useCallback(async () => {
     if (!canStart) return;
 
     if (mode === "create-video") {
+      if (!authToken) {
+        alert("Please sign in to use this feature");
+        return;
+      }
+
       setIsGenerating(true);
       setVideoUrl(null);
 
@@ -441,6 +499,9 @@ const VeoStudio: React.FC = () => {
       try {
         const resp = await fetch("/api/veo/generate", {
           method: "POST",
+          headers: {
+            "Authorization": `Bearer ${authToken}`,
+          },
           body: form,
         });
         const json = await resp.json();
@@ -474,6 +535,7 @@ const VeoStudio: React.FC = () => {
     generateWithGemini,
     editWithGemini,
     composeWithGemini,
+    authToken,
   ]);
 
   // Poll operation until done then download
@@ -484,7 +546,10 @@ const VeoStudio: React.FC = () => {
       try {
         const resp = await fetch("/api/veo/operation", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`,
+          },
           body: JSON.stringify({ name: operationName }),
         });
         const fresh = await resp.json();
@@ -493,7 +558,10 @@ const VeoStudio: React.FC = () => {
           if (fileUri) {
             const dl = await fetch("/api/veo/download", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${authToken}`,
+              },
               body: JSON.stringify({ uri: fileUri }),
             });
             const blob = await dl.blob();
@@ -518,7 +586,7 @@ const VeoStudio: React.FC = () => {
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [operationName, videoUrl]);
+  }, [operationName, videoUrl, authToken]);
 
   const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];

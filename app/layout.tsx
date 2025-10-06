@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Manrope, Source_Code_Pro } from "next/font/google";
 
 import "./globals.css";
+import AuthWrapper from "@/components/AuthWrapper";
 
 // Google Font
 const manrope = Manrope({
@@ -32,9 +33,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${manrope.variable} ${sourceCodePro.variable}`}>
-        <div className="bg-gray-200 text-stone-900">
-          <main>{children}</main>
-        </div>
+        <AuthWrapper>
+          <div className="bg-gray-200 text-stone-900">
+            <main>{children}</main>
+          </div>
+        </AuthWrapper>
       </body>
     </html>
   );

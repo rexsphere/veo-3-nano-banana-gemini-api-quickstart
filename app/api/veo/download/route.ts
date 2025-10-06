@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
+import { authenticateRequest } from "@/lib/auth-middleware";
 
 if (!process.env.GEMINI_API_KEY) {
   throw new Error("GEMINI_API_KEY environment variable is not set.");
 }
 
 export async function POST(req: Request) {
+  // Check authentication
+  const authResult = await authenticateRequest(req);
+  if (authResult.status === 401) {
+    return authResult;
+  }
   try {
     const body = await req.json();
     const uri: string | undefined = body?.uri || body?.file?.uri;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
+import { authenticateRequest } from "@/lib/auth-middleware";
 
 if (!process.env.GEMINI_API_KEY) {
   throw new Error("GEMINI_API_KEY environment variable is not set.");
@@ -8,6 +9,11 @@ if (!process.env.GEMINI_API_KEY) {
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function POST(req: Request) {
+  // Check authentication
+  const authResult = await authenticateRequest(req);
+  if (authResult.status === 401) {
+    return authResult;
+  }
   try {
     const body = await req.json();
     const prompt = (body?.prompt as string) || "";
