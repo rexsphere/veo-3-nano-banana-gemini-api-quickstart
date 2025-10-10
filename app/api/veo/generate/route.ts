@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { authenticateRequest } from "@/lib/auth-middleware";
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error("GEMINI_API_KEY environment variable is not set.");
+// Use VEO_API_KEY if available, fallback to GEMINI_API_KEY
+const API_KEY = process.env.VEO_API_KEY || process.env.GEMINI_API_KEY;
+if (!API_KEY) {
+  throw new Error("VEO_API_KEY (or GEMINI_API_KEY) environment variable is not set.");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 export async function POST(req: Request) {
   // Check authentication

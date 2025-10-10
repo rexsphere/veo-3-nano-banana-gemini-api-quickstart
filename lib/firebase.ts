@@ -10,8 +10,24 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+// Debug: Log config (remove API key for security)
+console.log('Firebase Config Check:', {
+  hasApiKey: !!firebaseConfig.apiKey,
+  hasAuthDomain: !!firebaseConfig.authDomain,
+  hasProjectId: !!firebaseConfig.projectId,
+  hasStorageBucket: !!firebaseConfig.storageBucket,
+  hasMessagingSenderId: !!firebaseConfig.messagingSenderId,
+  hasAppId: !!firebaseConfig.appId,
+});
+
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+  console.log('Firebase app initialized successfully');
+} catch (error) {
+  console.error('Firebase app initialization failed:', error);
+}
 
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);
@@ -21,3 +37,4 @@ export const googleProvider = new GoogleAuthProvider();
 export const githubProvider = new GithubAuthProvider();
 
 export default app;
+

@@ -51,10 +51,42 @@ export async function POST(req: Request) {
         mimeType: imageMimeType,
       },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error generating image with Gemini:", error);
+
+    // Handle specific quota errors
+    if (error && typeof error === 'object' && 'status' in error && error.status === 429) {
+      return NextResponse.json(
+        {
+          error: "🚫 Gemini API Quota Exceeded",
+          message: "Your free tier quota for Gemini API has been exhausted.",
+          solutions: [
+            "🔄 Wait for daily quota reset (resets at midnight PST)",
+            "💳 Upgrade to Google AI paid plan: https://ai.google.dev/pricing",
+            "🎨 Switch to 'Imagen 4.0 Fast' model (requires billing)",
+            "⏰ Retry in 16+ seconds as suggested by the API"
+          ],
+          details: "Free tier limits: 50 requests/day, resets daily",
+          retryAfter: 16
+        },
+        { status: 429 }
+      );
+    }
+
+    // Handle other API errors
+    if (error && typeof error === 'object' && 'status' in error) {
+      return NextResponse.json(
+        {
+          error: "Gemini API Error",
+          message: `API returned status ${error.status}`,
+          details: error.message || "Unknown API error"
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Failed to generate image" },
+      { error: "Failed to generate image", details: "Unexpected error occurred" },
       { status: 500 }
     );
   }

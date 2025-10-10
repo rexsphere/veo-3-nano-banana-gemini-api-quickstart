@@ -10,9 +10,12 @@ import React, {
 import Image from "next/image";
 import { Upload, Film, Image as ImageIcon } from "lucide-react";
 import { auth } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, User } from "firebase/auth";
 import Composer from "@/components/ui/Composer";
 import VideoPlayer from "@/components/ui/VideoPlayer";
+import Auth from "@/components/Auth";
+import ParameterControls, { GenerationParams } from "@/components/ui/ParameterControls";
+import ChatInterface, { ChatMessage } from "@/components/ui/ChatInterface";
 
 type VeoOperationName = string | null;
 
@@ -25,12 +28,49 @@ type StudioMode =
 const POLL_INTERVAL_MS = 5000;
 
 const VeoStudio: React.FC = () => {
+  const [user, setUser] = useState<User | null>(null);
   const [authToken, setAuthToken] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [mode, setMode] = useState<StudioMode>("create-image");
   const [prompt, setPrompt] = useState(""); // Video or image prompt
   const [negativePrompt, setNegativePrompt] = useState("");
   const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [selectedModel, setSelectedModel] = useState("veo-3.0-generate-001");
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-image-preview");
+  
+  // Generation parameters (dynamic, user-configurable)
+  const [generationParams, setGenerationParams] = useState<GenerationParams>({
+    temperature: 1.0,
+    topP: 0.95,
+    maxOutputTokens: 4096,
+    safetyLevel: "off",
+  });
+  
+  // Chat messages (instead of alerts)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+
+  // Helper to add chat message
+  const addMessage = useCallback((
+    role: ChatMessage["role"],
+    type: ChatMessage["type"],
+    content: string,
+    imageUrl?: string,
+    videoUrl?: string,
+    details?: string,
+    solutions?: string[]
+  ) => {
+    const newMessage: ChatMessage = {
+      id: `${Date.now()}-${Math.random()}`,
+      role,
+      type,
+      content,
+      imageUrl,
+      videoUrl,
+      details,
+      solutions,
+      timestamp: new Date(),
+    };
+    setChatMessages((prev) => [...prev, newMessage]);
+  }, []);
 
   // Update selected model when mode changes
   useEffect(() => {
@@ -50,10 +90,29 @@ const VeoStudio: React.FC = () => {
 
   // Listen for auth state changes and get ID token
   useEffect(() => {
+    console.log('Setting up Firebase auth listener...');
+
+    // Development bypass - skip authentication in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Development mode: Skipping Firebase auth');
+      setUser({ uid: 'dev-user', email: 'dev@example.com' } as any);
+      setAuthToken('dev-token');
+      setAuthLoading(false);
+      return;
+    }
+
+    let timeoutId: NodeJS.Timeout;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('Firebase auth state changed:', user ? 'User authenticated' : 'No user');
+      setUser(user);
+      setAuthLoading(false);
+      clearTimeout(timeoutId);
+
       if (user) {
         try {
           const token = await user.getIdToken();
+          console.log('Got auth token');
           setAuthToken(token);
         } catch (error) {
           console.error('Error getting ID token:', error);
@@ -64,7 +123,16 @@ const VeoStudio: React.FC = () => {
       }
     });
 
-    return () => unsubscribe();
+    // Force loading to complete after 5 seconds if Firebase doesn't respond
+    timeoutId = setTimeout(() => {
+      console.log('Firebase auth timeout - forcing completion');
+      setAuthLoading(false);
+    }, 5000);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   // Image generation prompts
@@ -122,6 +190,22 @@ const VeoStudio: React.FC = () => {
       .trim();
     return cleaned || selectedModel;
   }, [selectedModel]);
+
+  // Model status information
+  const getModelStatus = (model: string) => {
+    if (model.includes("gemini")) {
+      return { status: "free", limit: "50 requests/day", cost: "Free tier" };
+    }
+    if (model.includes("imagen")) {
+      return { status: "paid", limit: "Unlimited", cost: "Requires billing" };
+    }
+    if (model.includes("veo")) {
+      return { status: "paid", limit: "Varies", cost: "Requires billing" };
+    }
+    return { status: "unknown", limit: "Unknown", cost: "Unknown" };
+  };
+
+  const currentModelStatus = getModelStatus(selectedModel);
 
   // Rotating loading messages containing model name
   const loadingMessages = useMemo(() => {
@@ -248,9 +332,12 @@ const VeoStudio: React.FC = () => {
   // Imagen helper
   const generateWithImagen = useCallback(async () => {
     if (!authToken) {
-      alert("Please sign in to use this feature");
+      addMessage("system", "info", "Please sign in to use this feature");
       return;
     }
+    
+    // Add user message
+    addMessage("user", "text", `Generate image: "${imagePrompt}"`);
 
     console.log("Starting Imagen generation");
     setImagenBusy(true);
@@ -276,70 +363,107 @@ const VeoStudio: React.FC = () => {
       if (json?.image?.imageBytes) {
         const dataUrl = `data:${json.image.mimeType};base64,${json.image.imageBytes}`;
         setGeneratedImage(dataUrl);
+        addMessage("assistant", "image", "Here's your generated image!", dataUrl);
       } else if (json?.error) {
         console.error("Imagen API returned error:", json.error);
         throw new Error(json.error);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error in generateWithImagen:", e);
-      alert(`Failed to generate image: ${e.message}`);
+      addMessage("assistant", "error", "Failed to generate image with Imagen", undefined, undefined, e.message);
     } finally {
       console.log("Resetting Imagen busy state");
       setImagenBusy(false);
     }
-  }, [imagePrompt, authToken]);
+  }, [imagePrompt, authToken, addMessage]);
 
-  // Gemini image generation helper
+  // Gemini image generation helper - uses Firebase AI SDK
   const generateWithGemini = useCallback(async () => {
     if (!authToken) {
-      alert("Please sign in to use this feature");
+      addMessage("system", "info", "Please sign in to use this feature");
       return;
     }
 
-    console.log("Starting Gemini image generation");
+    // Add user message
+    addMessage("user", "text", `Generate: "${imagePrompt}"`);
+
+    console.log("Starting Gemini image generation with Firebase AI SDK");
     setGeminiBusy(true);
     setGeneratedImage(null);
     try {
-      const resp = await fetch("/api/gemini/generate", {
+      const resp = await fetch("/api/firebase-ai/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${authToken}`,
         },
-        body: JSON.stringify({ prompt: imagePrompt }),
+        body: JSON.stringify({
+          prompt: imagePrompt,
+          model: "gemini-2.5-flash-image",
+          // Pass dynamic parameters from UI
+          temperature: generationParams.temperature,
+          topP: generationParams.topP,
+          maxOutputTokens: generationParams.maxOutputTokens,
+          safetyLevel: generationParams.safetyLevel,
+        }),
       });
 
       if (!resp.ok) {
-        console.error("Gemini API error:", resp.status, resp.statusText);
+        console.error("Firebase AI API error:", resp.status, resp.statusText);
+
+        // Handle quota exceeded error specifically
+        if (resp.status === 429) {
+          const errorData = await resp.json().catch(() => ({}));
+          const solutions = errorData.solutions || [];
+          const message = errorData.message || "Firebase AI quota exceeded";
+          const details = errorData.details || "";
+
+          addMessage("assistant", "error", `🚫 Quota Exceeded: ${message}`, undefined, undefined, details, solutions);
+          return;
+        }
+
         throw new Error(`API error: ${resp.status}`);
       }
 
       const json = await resp.json();
-      console.log("Gemini API response:", json);
+      console.log("Firebase AI response:", json);
 
-      if (json?.image?.imageBytes) {
-        const dataUrl = `data:${json.image.mimeType};base64,${json.image.imageBytes}`;
-        setGeneratedImage(dataUrl);
+      if (json?.response) {
+        // For text responses, we might need to handle images differently
+        // For now, let's check if the response contains image data
+        const responseText = json.response;
+
+        // Check if response contains image data (base64)
+        const imageMatch = responseText.match(/data:image\/[^;]+;base64,[^"'\s]+/);
+        if (imageMatch) {
+          setGeneratedImage(imageMatch[0]);
+          addMessage("assistant", "image", "Here's your generated image!", imageMatch[0]);
+        } else {
+          // If no image found, show the text response as a message
+          addMessage("assistant", "text", responseText);
+        }
       } else if (json?.error) {
-        console.error("Gemini API returned error:", json.error);
+        console.error("Firebase AI returned error:", json.error);
         throw new Error(json.error);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error in generateWithGemini:", e);
-      // Show user-friendly error message
-      alert(`Failed to generate image: ${e.message}`);
+      addMessage("assistant", "error", "Failed to generate content", undefined, undefined, e.message);
     } finally {
       console.log("Resetting Gemini busy state");
       setGeminiBusy(false);
     }
-  }, [imagePrompt, authToken]);
+  }, [imagePrompt, authToken, generationParams, addMessage]);
 
   // Gemini image edit helper
   const editWithGemini = useCallback(async () => {
     if (!authToken) {
-      alert("Please sign in to use this feature");
+      addMessage("system", "info", "Please sign in to use this feature");
       return;
     }
+    
+    // Add user message
+    addMessage("user", "text", `Edit image: "${editPrompt}"`);
 
     console.log("Starting Gemini image edit");
     setGeminiBusy(true);
@@ -376,25 +500,29 @@ const VeoStudio: React.FC = () => {
       if (json?.image?.imageBytes) {
         const dataUrl = `data:${json.image.mimeType};base64,${json.image.imageBytes}`;
         setGeneratedImage(dataUrl);
+        addMessage("assistant", "image", "Here's your edited image!", dataUrl);
       } else if (json?.error) {
         console.error("Gemini edit API returned error:", json.error);
         throw new Error(json.error);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error in editWithGemini:", e);
-      alert(`Failed to edit image: ${e.message}`);
-    } finally {
+      addMessage("assistant", "error", "Failed to edit image", undefined, undefined, e.message);
+    } finally{
       console.log("Resetting Gemini busy state after edit");
       setGeminiBusy(false);
     }
-  }, [editPrompt, imageFile, generatedImage, authToken]);
+  }, [editPrompt, imageFile, generatedImage, authToken, addMessage]);
 
   // Gemini image compose helper
   const composeWithGemini = useCallback(async () => {
     if (!authToken) {
-      alert("Please sign in to use this feature");
+      addMessage("system", "info", "Please sign in to use this feature");
       return;
     }
+    
+    // Add user message
+    addMessage("user", "text", `Compose ${multipleImageFiles.length} images: "${composePrompt}"`);
 
     setGeminiBusy(true);
     setGeneratedImage(null);
@@ -452,18 +580,19 @@ const VeoStudio: React.FC = () => {
       if (json?.image?.imageBytes) {
         const dataUrl = `data:${json.image.mimeType};base64,${json.image.imageBytes}`;
         setGeneratedImage(dataUrl);
+        addMessage("assistant", "image", "Here's your composed image!", dataUrl);
       } else if (json?.error) {
         console.error("Gemini compose API returned error:", json.error);
         throw new Error(json.error);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error in composeWithGemini:", e);
-      alert(`Failed to compose images: ${e.message}`);
+      addMessage("assistant", "error", "Failed to compose images", undefined, undefined, e.message);
     } finally {
       console.log("Resetting Gemini busy state after compose");
       setGeminiBusy(false);
     }
-  }, [composePrompt, multipleImageFiles, imageFile, generatedImage, authToken]);
+  }, [composePrompt, multipleImageFiles, imageFile, generatedImage, authToken, addMessage]);
 
   // Start generation based on current mode
   const startGeneration = useCallback(async () => {
@@ -471,9 +600,12 @@ const VeoStudio: React.FC = () => {
 
     if (mode === "create-video") {
       if (!authToken) {
-        alert("Please sign in to use this feature");
+        addMessage("system", "info", "Please sign in to use this feature");
         return;
       }
+      
+      // Add user message
+      addMessage("user", "text", `Generate video: "${prompt}"`);
 
       setIsGenerating(true);
       setVideoUrl(null);
@@ -514,7 +646,11 @@ const VeoStudio: React.FC = () => {
       // Use selected model (Imagen or Gemini)
       if (selectedModel.includes("imagen")) {
         await generateWithImagen();
+      } else if (selectedModel === "gemini-2.5-flash-image") {
+        // Use Firebase AI SDK for Nano Banana model
+        await generateWithGemini();
       } else {
+        // Use legacy Gemini API for other Gemini models
         await generateWithGemini();
       }
     } else if (mode === "edit-image") {
@@ -711,297 +847,60 @@ const VeoStudio: React.FC = () => {
     }
   };
 
+  // Show loading spinner while checking auth state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading...</p>
+            <p className="mt-1 text-xs text-gray-500">Checking authentication...</p>
+            <p className="mt-1 text-xs text-green-600">Development Mode: Auto-login enabled</p>
+            <p className="mt-1 text-xs text-gray-400">If stuck, click below:</p>
+          <button
+            className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            onClick={() => {
+              console.log('Manual bypass: showing auth screen');
+              setAuthLoading(false);
+            }}
+          >
+            Show Login Screen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show auth screen if user is not authenticated
+  if (!user) {
+    return <Auth onAuthStateChange={setUser} />;
+  }
+
   return (
-    <div
-      className="relative min-h-screen w-full text-stone-900"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      {/* Main content area */}
-      <div className="flex flex-col items-center justify-center min-h-screen pb-40 px-4">
-        {!videoUrl &&
-          (isLoadingUI ? (
-            <div className="w-full max-w-3xl">
-              <div className="flex flex-col items-center justify-center gap-3 text-center px-4">
-                {mode === "create-video" ? (
-                  <Film className="w-16 h-16 text-gray-400 animate-pulse" />
-                ) : (
-                  <ImageIcon className="w-16 h-16 text-gray-400 animate-pulse" />
-                )}
-                <div className="inline-flex items-center rounded-full bg-gray-200/70 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-700/60 dark:text-gray-200">
-                  {modelLabel}
-                </div>
-                <div className="text-xs text-gray-600 dark:text-gray-300">
-                  {loadingMessages[loadingIndex % loadingMessages.length]}
-                </div>
-                <div className="mt-2 h-1 w-48 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                  <div className="h-full w-full animate-[shimmer_1.6s_infinite] -translate-x-full rounded-full bg-gray-400/70 dark:bg-gray-500/70" />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="w-full max-w-3xl">
-              {((mode === "edit-image" && !imageFile && !generatedImage) ||
-                (mode === "create-video" && !imageFile && !generatedImage)) && (
-                <div
-                  className={`rounded-lg border-2 border-dashed p-8 cursor-pointer transition-colors ${"bg-white/10 border-gray-300/70 hover:bg-white/30"}`}
-                  onClick={() => {
-                    // Trigger single file input
-                    const input = document.getElementById(
-                      "single-image-input"
-                    ) as HTMLInputElement;
-                    input?.click();
-                  }}
-                >
-                  <div className="flex flex-col items-center gap-3 text-slate-800/80">
-                    <Upload className="w-8 h-8" />
-                    <div className="text-center">
-                      <div className="font-medium text-lg">
-                        Drop an image here, or click to upload
-                      </div>
-                      <div className="text-sm opacity-80 mt-1">
-                        PNG, JPG, WEBP up to 10MB
-                      </div>
-                      {mode === "edit-image" &&
-                        (imageFile || generatedImage) && (
-                          <div className="text-sm mt-2 text-green-600">
-                            ✓ Image selected
-                          </div>
-                        )}
+    <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
+      {/* Single unified interface - ChatGPT/Gemini style */}
+      <div className="flex-1 flex flex-col max-w-5xl w-full mx-auto">
+        {/* Chat messages area */}
+        <div className="flex-1 overflow-hidden">
+          <ChatInterface messages={chatMessages} className="h-full" />
+        </div>
 
-                      {mode === "create-video" &&
-                        (imageFile || generatedImage) && (
-                          <div className="text-sm mt-2 text-green-600">
-                            ✓ Image selected for video generation
-                          </div>
-                        )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {mode === "edit-image" && imageFile && uploadedImageUrl && (
-                <div className="w-full max-w-4xl aspect-video overflow-hidden rounded-lg border relative mx-auto">
-                  <Image
-                    src={uploadedImageUrl}
-                    alt="Uploaded for editing"
-                    className="w-full h-full object-contain"
-                    width={800}
-                    height={450}
-                  />
-                </div>
-              )}
-
-              {!(
-                mode === "edit-image" ||
-                mode === "compose-image" ||
-                mode === "create-video"
-              ) && (
-                <div className="text-stone-400 select-none text-center w-full">
-                  Nothing to see here
-                </div>
-              )}
-
-              {/* Hidden file inputs - always available */}
-              <input
-                id="single-image-input"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={onPickImage}
-              />
-              <input
-                id="multiple-image-input"
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={onPickMultipleImages}
-              />
-
-              {/* Compose mode initial state when no generated image */}
-              {mode === "compose-image" && !generatedImage && (
-                <div className="w-full mt-8 flex justify-center">
-                  <div className="max-w-3xl">
-                    <div className="text-center text-slate-600 mb-6">
-                      <div className="text-lg font-medium mb-2">
-                        Compose Multiple Images
-                      </div>
-                      <div className="text-sm opacity-80">
-                        Upload multiple images to combine them into a single
-                        composition
-                      </div>
-                    </div>
-
-                    {/* Upload area for compose mode */}
-                    <div
-                      className={`rounded-lg border-2 border-dashed p-8 cursor-pointer transition-colors ${"bg-white/10 border-gray-300/70 hover:bg-white/30"}`}
-                      onClick={() => {
-                        const input = document.getElementById(
-                          "multiple-image-input"
-                        ) as HTMLInputElement;
-                        input?.click();
-                      }}
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                    >
-                      <div className="flex flex-col items-center gap-3 text-slate-800/80">
-                        <Upload className="w-8 h-8" />
-                        <div className="text-center">
-                          <div className="font-medium text-lg">
-                            Drop multiple images here, or click to upload
-                          </div>
-                          <div className="text-sm opacity-80 mt-1">
-                            PNG, JPG, WEBP up to 10MB each (max 10 images)
-                          </div>
-                          {multipleImageFiles.length > 0 && (
-                            <div className="text-sm mt-2 text-green-600">
-                              ✓ {multipleImageFiles.length} image
-                              {multipleImageFiles.length > 1 ? "s" : ""}{" "}
-                              selected{" "}
-                              {multipleImageFiles.length >= 10
-                                ? "(max reached)"
-                                : ""}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Thumbnails below dropzone */}
-                    {multipleImageFiles.length > 0 && (
-                      <div className="mt-6">
-                        <div className="flex flex-wrap gap-4 justify-center">
-                          {multipleImageFiles.map((file, index) => (
-                            <div
-                              key={index}
-                              className="w-28 h-28 rounded-lg overflow-hidden border-2 border-white/30 shadow-md"
-                              title={file.name}
-                            >
-                              <Image
-                                src={URL.createObjectURL(file)}
-                                alt={`Preview ${index + 1}`}
-                                className="w-full h-full object-cover"
-                                width={112}
-                                height={112}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-
-        {generatedImage &&
-          !videoUrl &&
-          !(mode === "create-video" && isLoadingUI) && (
-            <div className="w-full max-w-5xl mx-auto">
-              {mode === "compose-image" ? (
-                /* Compose mode: Image on top, upload area below */
-                <div className="flex flex-col gap-6 items-center">
-                  <div className="w-full max-w-2xl relative">
-                    <div className="aspect-video overflow-hidden rounded-lg border">
-                      <Image
-                        src={generatedImage}
-                        alt="Generated"
-                        className="w-full h-full object-contain"
-                        width={800}
-                        height={450}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-4 w-full max-w-md">
-                    <h4 className="text-sm font-medium text-slate-700 text-center">
-                      Add More Images to Compose
-                    </h4>
-                    {/* Status indicator */}
-                    <div className="text-xs text-center -mt-2 mb-2">
-                      {(imageFile || generatedImage) && (
-                        <div className="text-blue-600">
-                          ✓ Existing image will be included
-                        </div>
-                      )}
-                    </div>
-                    <div
-                      className="rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors bg-white/10 border-gray-300/70 hover:bg-white/30"
-                      onClick={() => {
-                        const input = document.getElementById(
-                          "multiple-image-input"
-                        ) as HTMLInputElement;
-                        input?.click();
-                      }}
-                    >
-                      <div className="flex flex-col items-center gap-2 text-slate-800/80">
-                        <Upload className="w-6 h-6" />
-                        <div className="text-center">
-                          <div className="font-medium text-sm">
-                            Drop images here or click to add
-                          </div>
-                          <div className="text-xs opacity-80">
-                            PNG, JPG, WEBP up to 10MB each
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Show thumbnails of additional images */}
-                    {multipleImageFiles.length > 0 && (
-                      <div className="mt-4">
-                        <div className="flex flex-wrap gap-2 justify-center max-w-xs mx-auto">
-                          {multipleImageFiles.map((file, index) => (
-                            <div
-                              key={index}
-                              className="w-20 h-20 rounded-lg overflow-hidden border-2 border-white/30 shadow-sm"
-                              title={file.name}
-                            >
-                              <Image
-                                src={URL.createObjectURL(file)}
-                                alt={`Preview ${index + 1}`}
-                                className="w-full h-full object-cover"
-                                width={80}
-                                height={80}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+        {/* Loading indicator overlay */}
+        {isLoadingUI && (
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30">
+            <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col items-center gap-3">
+              {mode === "create-video" ? (
+                <Film className="w-12 h-12 text-blue-500 animate-pulse" />
               ) : (
-                /* Other modes: Image centered */
-                <div className="flex flex-col items-center gap-6">
-                  <div className="w-full max-w-4xl aspect-video overflow-hidden rounded-lg border relative">
-                    <Image
-                      src={generatedImage}
-                      alt="Generated"
-                      className="w-full h-full object-contain"
-                      width={800}
-                      height={450}
-                    />
-                  </div>
-                </div>
+                <ImageIcon className="w-12 h-12 text-purple-500 animate-pulse" />
               )}
-            </div>
-          )}
-
-        {videoUrl && (
-          <div className="w-full max-w-3xl mx-auto">
-            <div className="flex flex-col items-center gap-6">
-              {/* Video in center */}
-              <VideoPlayer
-                src={videoUrl}
-                onOutputChanged={handleTrimmedOutput}
-                onDownload={downloadVideo}
-                onResetTrim={handleResetTrimState}
-              />
+              <div className="text-sm font-medium text-gray-700">{modelLabel}</div>
+              <div className="text-xs text-gray-500">
+                {loadingMessages[loadingIndex % loadingMessages.length]}
+              </div>
+              <div className="h-1 w-32 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full w-full animate-[shimmer_1.6s_infinite] -translate-x-full bg-blue-500" />
+              </div>
             </div>
           </div>
         )}
