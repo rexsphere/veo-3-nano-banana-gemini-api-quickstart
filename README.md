@@ -108,24 +108,31 @@ Open your browser and navigate to `http://localhost:3000` to see the application
 
 ## Project Structure
 
-The project is a standard Next.js application with the following key directories:
+The project uses a microservices architecture with separate frontend and backend:
 
+### Frontend (Next.js)
 -   `app/`: Contains the main application logic and pages
-    -   `page.tsx`: Main page with the unified composer UI.
-    -   `api/`: API routes for different operations
-        -   `imagen/generate/`: Image generation with Imagen 4
-        -   `gemini/generate/`: Image generation with Gemini 2.5 Flash Image
-        -   `gemini/edit/`: Image editing/composition with Gemini 2.5 Flash Image
-        -   `veo/generate/`: Video generation operations
-        -   `veo/operation/`: Check video generation status
-        -   `veo/download/`: Download generated videos
+    -   `page.tsx`: Main page with the unified composer UI
 -   `components/`: Reusable React components
-    -   `ui/Composer.tsx`: The main unified composer for all interactions.
+    -   `ui/Composer.tsx`: The main unified composer for all interactions
     -   `ui/VideoPlayer.tsx`: Video player with trimming
     -   `ui/ModelSelector.tsx`: Model selection component
-    -   `ui/dropzone.tsx`: Drag-and-drop component for file uploads.
--   `lib/`: Utility functions and schema definitions
+    -   `ui/dropzone.tsx`: Drag-and-drop component for file uploads
+-   `lib/`: Utility functions and API client
+    -   `api-client.ts`: Type-safe API client for Python backend
 -   `public/`: Static assets
+
+### Backend (Python FastAPI)
+-   `backend/app/`: Python FastAPI application
+    -   `main.py`: FastAPI application entry point
+    -   `api/v1/`: API endpoints
+        -   `content.py`: Text generation endpoints
+        -   `media.py`: Image generation, editing, and composition
+        -   `video.py`: Video generation and management
+    -   `models/`: Pydantic data models
+    -   `services/`: Google AI SDK integrations
+    -   `middleware/`: Authentication and logging
+    -   `core/`: Configuration and dependencies
 
 ## Official Docs and Resources
 
@@ -135,17 +142,23 @@ The project is a standard Next.js application with the following key directories
 
 ## How it Works
 
-The application uses the following API routes to interact with the Google models:
+The application uses a microservices architecture where the Next.js frontend communicates with a Python FastAPI backend:
 
-### Image APIs
--   `app/api/imagen/generate/route.ts`: Handles image generation requests with Imagen 4
--   `app/api/gemini/generate/route.ts`: Handles image generation requests with Gemini 2.5 Flash Image
--   `app/api/gemini/edit/route.ts`: Handles image editing and composition with Gemini 2.5 Flash (supports multiple images)
+### Frontend (Next.js)
+- **UI Components**: React components for user interaction
+- **API Client**: Type-safe client (`lib/api-client.ts`) that handles all backend communication
+- **State Management**: React state for UI interactions and data flow
 
-### Video APIs
--   `app/api/veo/generate/route.ts`: Handles video generation requests with Veo 3
--   `app/api/veo/operation/route.ts`: Checks the status of video generation operations
--   `app/api/veo/download/route.ts`: Downloads generated videos
+### Backend (Python FastAPI)
+- **Content API** (`/api/v1/content/`): Text generation using Gemini and Firebase AI
+- **Media API** (`/api/v1/media/`): Image generation, editing, and composition
+- **Video API** (`/api/v1/video/`): Video generation with Veo 3, status tracking, and downloads
+
+### AI Service Integration
+- **Gemini Service**: Direct Gemini API integration for text and image generation
+- **Firebase AI Service**: Firebase AI SDK integration for advanced text generation
+- **Imagen Service**: Imagen 4 integration for high-quality image generation
+- **Veo Service**: Veo 3 integration for video generation and management
 
 ## 🚀 Deployment
 
@@ -181,14 +194,24 @@ The application uses the following API routes to interact with the Google models
 
 ## Technologies Used
 
+### Frontend
 -   [Next.js](https://nextjs.org/) - React framework for building the user interface
 -   [React](https://reactjs.org/) - JavaScript library for building user interfaces
+-   [TypeScript](https://www.typescriptlang.org/) - Type-safe JavaScript
 -   [Tailwind CSS](https://tailwindcss.com/) - For styling
--   [Firebase](https://firebase.google.com/) - Authentication and backend services
+-   [Firebase](https://firebase.google.com/) - Authentication
+
+### Backend
+-   [Python](https://python.org/) - Backend programming language
+-   [FastAPI](https://fastapi.tiangolo.com/) - Modern, fast web framework
+-   [Pydantic](https://pydantic.dev/) - Data validation and settings management
+-   [Google AI SDK](https://ai.google.dev/) - AI model integrations
+
+### AI Services
 -   [Gemini API](https://ai.google.dev/gemini-api/docs) with:
-  - **Veo 3** - For video generation
-  - **Imagen 4** - For high-quality image generation
-  - **Gemini 2.5 Flash** - For fast image generation, editing, and composition
+    - **Veo 3** - For video generation
+    - **Imagen 4** - For high-quality image generation
+    - **Gemini 2.5 Flash** - For fast image generation, editing, and composition
 
 ## Questions and feature requests
 

@@ -7,15 +7,22 @@ import React, {
   useRef,
   useState,
 } from "react";
-import Image from "next/image";
-import { Upload, Film, Image as ImageIcon } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
 import Composer from "@/components/ui/Composer";
-import VideoPlayer from "@/components/ui/VideoPlayer";
 import Auth from "@/components/Auth";
-import ParameterControls, { GenerationParams } from "@/components/ui/ParameterControls";
 import ChatInterface, { ChatMessage } from "@/components/ui/ChatInterface";
+import {
+  apiClient,
+  APIError,
+  ContentGenerationRequest,
+  ImageGenerationRequest,
+  ImageEditRequest,
+  ImageComposeRequest,
+  VideoGenerationRequest,
+  SafetyLevel,
+  VideoModel
+} from "@/lib/api-client";
 
 type VeoOperationName = string | null;
 
@@ -38,11 +45,11 @@ const VeoStudio: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-image-preview");
   
   // Generation parameters (dynamic, user-configurable)
-  const [generationParams, setGenerationParams] = useState<GenerationParams>({
+  const [generationParams] = useState({
     temperature: 1.0,
     topP: 0.95,
     maxOutputTokens: 4096,
-    safetyLevel: "off",
+    safetyLevel: "off" as SafetyLevel,
   });
   
   // Chat messages (instead of alerts)
@@ -95,13 +102,19 @@ const VeoStudio: React.FC = () => {
     // Development bypass - skip authentication in development
     if (process.env.NODE_ENV === 'development') {
       console.log('Development mode: Skipping Firebase auth');
-      setUser({ uid: 'dev-user', email: 'dev@example.com' } as any);
+      setUser({ uid: 'dev-user', email: 'dev@example.com' } as User);
       setAuthToken('dev-token');
       setAuthLoading(false);
+      // Set auth token for API client
+      apiClient.setAuthToken('dev-token');
       return;
     }
 
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    timeoutId = setTimeout(() => {
+      console.log('Firebase auth timeout - forcing completion');
+      setAuthLoading(false);
+    }, 5000);
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       console.log('Firebase auth state changed:', user ? 'User authenticated' : 'No user');
@@ -114,12 +127,20 @@ const VeoStudio: React.FC = () => {
           const token = await user.getIdToken();
           console.log('Got auth token');
           setAuthToken(token);
+          // Set auth token for API client
+          apiClient.setAuthToken(token);
+          // Clear timeout on successful auth
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
         } catch (error) {
           console.error('Error getting ID token:', error);
           setAuthToken(null);
+          apiClient.setAuthToken(null);
         }
       } else {
         setAuthToken(null);
+        apiClient.setAuthToken(null);
       }
     });
 
@@ -141,7 +162,7 @@ const VeoStudio: React.FC = () => {
   const [composePrompt, setComposePrompt] = useState("");
 
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [, setUploadedImageUrl] = useState<string | null>(null);
   const [multipleImageFiles, setMultipleImageFiles] = useState<File[]>([]);
   const [imagenBusy, setImagenBusy] = useState(false);
   const [geminiBusy, setGeminiBusy] = useState(false);
@@ -191,21 +212,6 @@ const VeoStudio: React.FC = () => {
     return cleaned || selectedModel;
   }, [selectedModel]);
 
-  // Model status information
-  const getModelStatus = (model: string) => {
-    if (model.includes("gemini")) {
-      return { status: "free", limit: "50 requests/day", cost: "Free tier" };
-    }
-    if (model.includes("imagen")) {
-      return { status: "paid", limit: "Unlimited", cost: "Requires billing" };
-    }
-    if (model.includes("veo")) {
-      return { status: "paid", limit: "Varies", cost: "Requires billing" };
-    }
-    return { status: "unknown", limit: "Unknown", cost: "Unknown" };
-  };
-
-  const currentModelStatus = getModelStatus(selectedModel);
 
   // Rotating loading messages containing model name
   const loadingMessages = useMemo(() => {
@@ -343,34 +349,32 @@ const VeoStudio: React.FC = () => {
     setImagenBusy(true);
     setGeneratedImage(null);
     try {
-      const resp = await fetch("/api/imagen/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({ prompt: imagePrompt }),
-      });
+      const request: ImageGenerationRequest = {
+        prompt: imagePrompt,
+        model: "imagen-4.0-fast-generate-001",
+        aspectRatio: "16:9"
+      };
 
-      if (!resp.ok) {
-        console.error("Imagen API error:", resp.status, resp.statusText);
-        throw new Error(`API error: ${resp.status}`);
-      }
+      const response = await apiClient.generateImage(request);
+      console.log("Imagen API response:", response);
 
-      const json = await resp.json();
-      console.log("Imagen API response:", json);
-
-      if (json?.image?.imageBytes) {
-        const dataUrl = `data:${json.image.mimeType};base64,${json.image.imageBytes}`;
+      if (response?.image?.imageBytes) {
+        const dataUrl = `data:${response.image.mimeType};base64,${response.image.imageBytes}`;
         setGeneratedImage(dataUrl);
         addMessage("assistant", "image", "Here's your generated image!", dataUrl);
-      } else if (json?.error) {
-        console.error("Imagen API returned error:", json.error);
-        throw new Error(json.error);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error in generateWithImagen:", e);
-      addMessage("assistant", "error", "Failed to generate image with Imagen", undefined, undefined, e.message);
+      if (e instanceof APIError) {
+        if (e.status === 429) {
+          addMessage("assistant", "error", "🚫 Quota Exceeded", undefined, undefined, e.message, ["Wait for daily quota reset", "Upgrade to paid plan", "Try again later"]);
+        } else {
+          addMessage("assistant", "error", "Failed to generate image with Imagen", undefined, undefined, e.message);
+        }
+      } else {
+        const errorMessage = e instanceof Error ? e.message : "Unknown error";
+        addMessage("assistant", "error", "Failed to generate image with Imagen", undefined, undefined, errorMessage);
+      }
     } finally {
       console.log("Resetting Imagen busy state");
       setImagenBusy(false);
@@ -391,47 +395,22 @@ const VeoStudio: React.FC = () => {
     setGeminiBusy(true);
     setGeneratedImage(null);
     try {
-      const resp = await fetch("/api/firebase-ai/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          prompt: imagePrompt,
-          model: "gemini-2.5-flash-image",
-          // Pass dynamic parameters from UI
-          temperature: generationParams.temperature,
-          topP: generationParams.topP,
-          maxOutputTokens: generationParams.maxOutputTokens,
-          safetyLevel: generationParams.safetyLevel,
-        }),
-      });
+      const request: ContentGenerationRequest = {
+        prompt: imagePrompt,
+        model: "gemini-2.5-flash-image",
+        temperature: generationParams.temperature,
+        topP: generationParams.topP,
+        maxOutputTokens: generationParams.maxOutputTokens,
+        safetyLevel: generationParams.safetyLevel as SafetyLevel,
+      };
 
-      if (!resp.ok) {
-        console.error("Firebase AI API error:", resp.status, resp.statusText);
+      const response = await apiClient.generateContent(request);
+      console.log("Firebase AI response:", response);
 
-        // Handle quota exceeded error specifically
-        if (resp.status === 429) {
-          const errorData = await resp.json().catch(() => ({}));
-          const solutions = errorData.solutions || [];
-          const message = errorData.message || "Firebase AI quota exceeded";
-          const details = errorData.details || "";
-
-          addMessage("assistant", "error", `🚫 Quota Exceeded: ${message}`, undefined, undefined, details, solutions);
-          return;
-        }
-
-        throw new Error(`API error: ${resp.status}`);
-      }
-
-      const json = await resp.json();
-      console.log("Firebase AI response:", json);
-
-      if (json?.response) {
+      if (response?.response) {
         // For text responses, we might need to handle images differently
         // For now, let's check if the response contains image data
-        const responseText = json.response;
+        const responseText = response.response;
 
         // Check if response contains image data (base64)
         const imageMatch = responseText.match(/data:image\/[^;]+;base64,[^"'\s]+/);
@@ -442,13 +421,19 @@ const VeoStudio: React.FC = () => {
           // If no image found, show the text response as a message
           addMessage("assistant", "text", responseText);
         }
-      } else if (json?.error) {
-        console.error("Firebase AI returned error:", json.error);
-        throw new Error(json.error);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error in generateWithGemini:", e);
-      addMessage("assistant", "error", "Failed to generate content", undefined, undefined, e.message);
+      if (e instanceof APIError) {
+        if (e.status === 429) {
+          addMessage("assistant", "error", "🚫 Quota Exceeded", undefined, undefined, e.message, ["Wait for daily quota reset", "Upgrade to paid plan", "Try again later"]);
+        } else {
+          addMessage("assistant", "error", "Failed to generate content", undefined, undefined, e.message);
+        }
+      } else {
+        const errorMessage = e instanceof Error ? e.message : "Unknown error";
+        addMessage("assistant", "error", "Failed to generate content", undefined, undefined, errorMessage);
+      }
     } finally {
       console.log("Resetting Gemini busy state");
       setGeminiBusy(false);
@@ -469,46 +454,48 @@ const VeoStudio: React.FC = () => {
     setGeminiBusy(true);
     setGeneratedImage(null);
     try {
-      const form = new FormData();
-      form.append("prompt", editPrompt);
+      let imageBase64: string | undefined;
+      let imageMimeType: string | undefined;
 
       if (imageFile) {
-        form.append("imageFile", imageFile);
+        // Convert file to base64
+        const arrayBuffer = await imageFile.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        imageBase64 = base64;
+        imageMimeType = imageFile.type || "image/png";
       } else if (generatedImage) {
         const [meta, b64] = generatedImage.split(",");
-        const mime = meta?.split(";")?.[0]?.replace("data:", "") || "image/png";
-        form.append("imageBase64", b64);
-        form.append("imageMimeType", mime);
+        imageBase64 = b64;
+        imageMimeType = meta?.split(";")?.[0]?.replace("data:", "") || "image/png";
       }
 
-      const resp = await fetch("/api/gemini/edit", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${authToken}`,
-        },
-        body: form,
-      });
-
-      if (!resp.ok) {
-        console.error("Gemini edit API error:", resp.status, resp.statusText);
-        throw new Error(`API error: ${resp.status}`);
+      if (!imageBase64) {
+        throw new Error("No image provided for editing");
       }
 
-      const json = await resp.json();
-      console.log("Gemini edit API response:", json);
+      const request: ImageEditRequest = {
+        prompt: editPrompt,
+        imageBase64,
+        imageMimeType,
+      };
 
-      if (json?.image?.imageBytes) {
-        const dataUrl = `data:${json.image.mimeType};base64,${json.image.imageBytes}`;
+      const response = await apiClient.editImage(request);
+      console.log("Gemini edit API response:", response);
+
+      if (response?.image?.imageBytes) {
+        const dataUrl = `data:${response.image.mimeType};base64,${response.image.imageBytes}`;
         setGeneratedImage(dataUrl);
         addMessage("assistant", "image", "Here's your edited image!", dataUrl);
-      } else if (json?.error) {
-        console.error("Gemini edit API returned error:", json.error);
-        throw new Error(json.error);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error in editWithGemini:", e);
-      addMessage("assistant", "error", "Failed to edit image", undefined, undefined, e.message);
-    } finally{
+      if (e instanceof APIError) {
+        addMessage("assistant", "error", "Failed to edit image", undefined, undefined, e.message);
+      } else {
+        const errorMessage = e instanceof Error ? e.message : "Unknown error";
+        addMessage("assistant", "error", "Failed to edit image", undefined, undefined, errorMessage);
+      }
+    } finally {
       console.log("Resetting Gemini busy state after edit");
       setGeminiBusy(false);
     }
@@ -527,67 +514,59 @@ const VeoStudio: React.FC = () => {
     setGeminiBusy(true);
     setGeneratedImage(null);
     try {
-      const form = new FormData();
-      form.append("prompt", composePrompt);
+      const images = [];
 
       // Add newly uploaded images first
       for (const file of multipleImageFiles) {
-        form.append("imageFiles", file);
+        const arrayBuffer = await file.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        images.push({
+          imageBytes: base64,
+          mimeType: file.type || "image/png"
+        });
       }
 
       // Include existing image last (if any)
       if (imageFile) {
-        form.append("imageFiles", imageFile);
-      } else if (generatedImage) {
-        // Convert base64 to blob and add as file
-        const [meta, b64] = generatedImage.split(",");
-        const mime = meta?.split(";")?.[0]?.replace("data:", "") || "image/png";
-        const byteCharacters = atob(b64);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: mime });
-
-        // Create a File object from the blob
-        const existingImageFile = new File([blob], "existing-image.png", {
-          type: mime,
+        const arrayBuffer = await imageFile.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        images.push({
+          imageBytes: base64,
+          mimeType: imageFile.type || "image/png"
         });
-        form.append("imageFiles", existingImageFile);
+      } else if (generatedImage) {
+        const [meta, b64] = generatedImage.split(",");
+        images.push({
+          imageBytes: b64,
+          mimeType: meta?.split(";")?.[0]?.replace("data:", "") || "image/png"
+        });
       }
 
-      const resp = await fetch("/api/gemini/edit", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${authToken}`,
-        },
-        body: form,
-      });
-
-      if (!resp.ok) {
-        console.error(
-          "Gemini compose API error:",
-          resp.status,
-          resp.statusText
-        );
-        throw new Error(`API error: ${resp.status}`);
+      if (images.length === 0) {
+        throw new Error("No images provided for composition");
       }
 
-      const json = await resp.json();
-      console.log("Gemini compose API response:", json);
+      const request: ImageComposeRequest = {
+        prompt: composePrompt,
+        images,
+      };
 
-      if (json?.image?.imageBytes) {
-        const dataUrl = `data:${json.image.mimeType};base64,${json.image.imageBytes}`;
+      const response = await apiClient.composeImages(request);
+      console.log("Gemini compose API response:", response);
+
+      if (response?.image?.imageBytes) {
+        const dataUrl = `data:${response.image.mimeType};base64,${response.image.imageBytes}`;
         setGeneratedImage(dataUrl);
         addMessage("assistant", "image", "Here's your composed image!", dataUrl);
-      } else if (json?.error) {
-        console.error("Gemini compose API returned error:", json.error);
-        throw new Error(json.error);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Error in composeWithGemini:", e);
-      addMessage("assistant", "error", "Failed to compose images", undefined, undefined, e.message);
+      if (e instanceof APIError) {
+        addMessage("assistant", "error", "Failed to compose images", undefined, undefined, e.message);
+      } else {
+        const errorMessage = e instanceof Error ? e.message : "Unknown error";
+        addMessage("assistant", "error", "Failed to compose images", undefined, undefined, errorMessage);
+      }
     } finally {
       console.log("Resetting Gemini busy state after compose");
       setGeminiBusy(false);
@@ -610,36 +589,40 @@ const VeoStudio: React.FC = () => {
       setIsGenerating(true);
       setVideoUrl(null);
 
-      const form = new FormData();
-      form.append("prompt", prompt);
-      form.append("model", selectedModel);
-      if (negativePrompt) form.append("negativePrompt", negativePrompt);
-      if (aspectRatio) form.append("aspectRatio", aspectRatio);
+      try {
+        let imageBase64: string | undefined;
+        let imageMimeType: string | undefined;
 
-      if (imageFile || generatedImage) {
         if (imageFile) {
-          form.append("imageFile", imageFile);
+          const arrayBuffer = await imageFile.arrayBuffer();
+          const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          imageBase64 = base64;
+          imageMimeType = imageFile.type || "image/png";
         } else if (generatedImage) {
           const [meta, b64] = generatedImage.split(",");
-          const mime =
-            meta?.split(";")?.[0]?.replace("data:", "") || "image/png";
-          form.append("imageBase64", b64);
-          form.append("imageMimeType", mime);
+          imageBase64 = b64;
+          imageMimeType = meta?.split(";")?.[0]?.replace("data:", "") || "image/png";
         }
-      }
 
-      try {
-        const resp = await fetch("/api/veo/generate", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${authToken}`,
-          },
-          body: form,
-        });
-        const json = await resp.json();
-        setOperationName(json?.name || null);
-      } catch (e) {
-        console.error(e);
+        const request: VideoGenerationRequest = {
+          prompt,
+          model: selectedModel as VideoModel,
+          aspectRatio,
+          negativePrompt: negativePrompt || undefined,
+          imageBase64,
+          imageMimeType,
+        };
+
+        const response = await apiClient.generateVideo(request);
+        setOperationName(response.operationId);
+      } catch (e: unknown) {
+        console.error("Video generation error:", e);
+        if (e instanceof APIError) {
+          addMessage("assistant", "error", "Failed to start video generation", undefined, undefined, e.message);
+        } else {
+          const errorMessage = e instanceof Error ? e.message : "Unknown error";
+          addMessage("assistant", "error", "Failed to start video generation", undefined, undefined, errorMessage);
+        }
         setIsGenerating(false);
       }
     } else if (mode === "create-image") {
@@ -672,6 +655,7 @@ const VeoStudio: React.FC = () => {
     editWithGemini,
     composeWithGemini,
     authToken,
+    addMessage,
   ]);
 
   // Poll operation until done then download
@@ -680,40 +664,35 @@ const VeoStudio: React.FC = () => {
     async function poll() {
       if (!operationName || videoUrl) return;
       try {
-        const resp = await fetch("/api/veo/operation", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({ name: operationName }),
-        });
-        const fresh = await resp.json();
-        if (fresh?.done) {
-          const fileUri = fresh?.response?.generatedVideos?.[0]?.video?.uri;
-          if (fileUri) {
-            const dl = await fetch("/api/veo/download", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${authToken}`,
-              },
-              body: JSON.stringify({ uri: fileUri }),
-            });
-            const blob = await dl.blob();
-            videoBlobRef.current = blob;
-            const url = URL.createObjectURL(blob);
-            setVideoUrl(url);
-            originalVideoUrlRef.current = url;
-          }
+        const status = await apiClient.getVideoStatus(operationName);
+        
+        if (status.status === "completed" && status.videoUrl) {
+          // Download the video
+          const blob = await apiClient.downloadVideo(operationName);
+          videoBlobRef.current = blob;
+          const url = URL.createObjectURL(blob);
+          setVideoUrl(url);
+          originalVideoUrlRef.current = url;
+          setIsGenerating(false);
+          return;
+        } else if (status.status === "failed") {
+          console.error("Video generation failed:", status.errorMessage);
+          addMessage("assistant", "error", "Video generation failed", undefined, undefined, status.errorMessage);
           setIsGenerating(false);
           return;
         }
-      } catch (e) {
-        console.error(e);
-        setIsGenerating(false);
-      } finally {
+        
+        // Continue polling if still in progress
         timer = setTimeout(poll, POLL_INTERVAL_MS);
+      } catch (e: unknown) {
+        console.error("Video polling error:", e);
+        if (e instanceof APIError) {
+          addMessage("assistant", "error", "Failed to check video status", undefined, undefined, e.message);
+        } else {
+          const errorMessage = e instanceof Error ? e.message : "Unknown error";
+          addMessage("assistant", "error", "Failed to check video status", undefined, undefined, errorMessage);
+        }
+        setIsGenerating(false);
       }
     }
     if (operationName && !videoUrl) {
@@ -722,66 +701,8 @@ const VeoStudio: React.FC = () => {
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [operationName, videoUrl, authToken]);
+  }, [operationName, videoUrl, authToken, addMessage]);
 
-  const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) {
-      setImageFile(f);
-      setGeneratedImage(null);
-    }
-  };
-
-  const onPickMultipleImages = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-      const limitedFiles = imageFiles.slice(0, 10);
-      setMultipleImageFiles((prevFiles) =>
-        [...prevFiles, ...limitedFiles].slice(0, 10)
-      );
-    }
-  };
-
-  const handleTrimmedOutput = (blob: Blob) => {
-    trimmedBlobRef.current = blob; // likely webm
-    if (trimmedUrlRef.current) {
-      URL.revokeObjectURL(trimmedUrlRef.current);
-    }
-    trimmedUrlRef.current = URL.createObjectURL(blob);
-    setVideoUrl(trimmedUrlRef.current);
-  };
-
-  const handleResetTrimState = () => {
-    if (trimmedUrlRef.current) {
-      URL.revokeObjectURL(trimmedUrlRef.current);
-      trimmedUrlRef.current = null;
-    }
-    trimmedBlobRef.current = null;
-    if (originalVideoUrlRef.current) {
-      setVideoUrl(originalVideoUrlRef.current);
-    }
-  };
-
-  const downloadVideo = async () => {
-    const blob = trimmedBlobRef.current || videoBlobRef.current;
-    if (!blob) return;
-    const isTrimmed = !!trimmedBlobRef.current;
-    const filename = isTrimmed ? "veo3_video_trimmed.webm" : "veo3_video.mp4";
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.style.display = "none";
-    link.href = url;
-    link.setAttribute("download", filename);
-    link.setAttribute("rel", "noopener");
-    link.target = "_self";
-    document.body.appendChild(link);
-    link.click();
-    setTimeout(() => {
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }, 0);
-  };
 
   const downloadImage = async () => {
     if (!generatedImage) return;
@@ -811,41 +732,11 @@ const VeoStudio: React.FC = () => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
       }, 0);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error downloading image:", error);
     }
   };
 
-  // Drag and drop handlers for compose mode
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const files = Array.from(e.dataTransfer.files);
-
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-
-    const limitedFiles = imageFiles.slice(0, 10);
-
-    if (limitedFiles.length > 0) {
-      if (mode === "compose-image") {
-        setMultipleImageFiles((prevFiles) =>
-          [...prevFiles, ...limitedFiles].slice(0, 10)
-        );
-      } else if (mode === "edit-image") {
-        setImageFile(limitedFiles[0]);
-      }
-    }
-  };
 
   // Show loading spinner while checking auth state
   if (authLoading) {
@@ -890,9 +781,9 @@ const VeoStudio: React.FC = () => {
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30">
             <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col items-center gap-3">
               {mode === "create-video" ? (
-                <Film className="w-12 h-12 text-blue-500 animate-pulse" />
+                <div className="w-12 h-12 text-blue-500 animate-pulse">🎬</div>
               ) : (
-                <ImageIcon className="w-12 h-12 text-purple-500 animate-pulse" />
+                <div className="w-12 h-12 text-purple-500 animate-pulse">🖼️</div>
               )}
               <div className="text-sm font-medium text-gray-700">{modelLabel}</div>
               <div className="text-xs text-gray-500">

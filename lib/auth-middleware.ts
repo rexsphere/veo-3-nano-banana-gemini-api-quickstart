@@ -26,8 +26,14 @@ export async function authenticateRequest(request: Request | NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
 
-    // Development bypass for local testing: Authorization: Bearer dev
-    if (authHeader === 'Bearer dev') {
+    // Development bypass for local testing
+    if (process.env.NODE_ENV === 'development') {
+      if (authHeader === 'Bearer dev-token' || authHeader === 'Bearer dev') {
+        console.log('Development bypass: Request authenticated');
+        return NextResponse.next();
+      }
+      // In development, allow requests without auth header for easier testing
+      console.log('Development mode: Allowing request without authentication header');
       return NextResponse.next();
     }
 

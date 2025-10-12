@@ -248,7 +248,7 @@ const Composer: React.FC<ComposerProps> = ({
                     : "text-slate-700 hover:bg-white/30 hover:text-slate-900"
                 }`}
               >
-                <Image className="w-4 h-4" aria-hidden="true" />
+                <Image className="w-4 h-4" aria-hidden="true" role="img" aria-label="Image icon" />
                 {getTabText("create-image")}
               </button>
             </TooltipTrigger>

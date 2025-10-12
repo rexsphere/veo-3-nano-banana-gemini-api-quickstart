@@ -8,7 +8,7 @@ export interface LogEntry {
   service: string;
   action: string;
   userId?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   duration?: number;
   statusCode?: number;
 }
@@ -63,7 +63,7 @@ class Logger {
     }
   }
 
-  info(service: string, action: string, details?: Record<string, any>): void {
+  info(service: string, action: string, details?: Record<string, unknown>): void {
     this.addLog({
       timestamp: this.formatTimestamp(),
       level: "info",
@@ -73,7 +73,7 @@ class Logger {
     });
   }
 
-  warn(service: string, action: string, details?: Record<string, any>): void {
+  warn(service: string, action: string, details?: Record<string, unknown>): void {
     this.addLog({
       timestamp: this.formatTimestamp(),
       level: "warn",
@@ -83,7 +83,7 @@ class Logger {
     });
   }
 
-  error(service: string, action: string, error: any, details?: Record<string, any>): void {
+  error(service: string, action: string, error: unknown, details?: Record<string, unknown>): void {
     this.addLog({
       timestamp: this.formatTimestamp(),
       level: "error",
@@ -97,7 +97,7 @@ class Logger {
     });
   }
 
-  debug(service: string, action: string, details?: Record<string, any>): void {
+  debug(service: string, action: string, details?: Record<string, unknown>): void {
     this.addLog({
       timestamp: this.formatTimestamp(),
       level: "debug",
@@ -113,8 +113,8 @@ class Logger {
     endpoint: string,
     method: string,
     userId?: string,
-    details?: Record<string, any>
-  ): { end: (statusCode: number, error?: any) => void } {
+    details?: Record<string, unknown>
+  ): { end: (statusCode: number, error?: unknown) => void } {
     const startTime = Date.now();
     const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -125,7 +125,7 @@ class Logger {
     });
 
     return {
-      end: (statusCode: number, error?: any) => {
+      end: (statusCode: number, error?: unknown) => {
         const duration = Date.now() - startTime;
         const logEntry: LogEntry = {
           timestamp: this.formatTimestamp(),
@@ -239,7 +239,7 @@ export function logApiRequest(
   req: Request,
   service: string,
   userId?: string,
-  additionalDetails?: Record<string, any>
+  additionalDetails?: Record<string, unknown>
 ) {
   const url = new URL(req.url);
   const endpoint = url.pathname;
@@ -250,4 +250,5 @@ export function logApiRequest(
     ...additionalDetails,
   });
 }
+
 
