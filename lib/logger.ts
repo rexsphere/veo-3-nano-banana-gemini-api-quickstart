@@ -91,8 +91,8 @@ class Logger {
       action,
       details: {
         ...details,
-        error: error?.message || String(error),
-        stack: error?.stack,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       },
     });
   }
@@ -138,7 +138,7 @@ class Logger {
           details: {
             requestId,
             ...details,
-            ...(error ? { error: error.message || String(error) } : {}),
+            ...(error ? { error: error instanceof Error ? error.message : String(error) } : {}),
           },
         };
         this.addLog(logEntry);

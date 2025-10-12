@@ -352,9 +352,4 @@ export class APIError extends Error {
 // Export singleton instance
 export const apiClient = new APIClient();
 
-// Export types for use in components
-export type {
-};
-
-// Re-export interfaces since they're already exported as interfaces
-export type { ContentGenerationRequest, ContentGenerationResponse, ImageGenerationRequest, ImageGenerationResponse, ImageEditRequest, ImageEditResponse, ImageComposeRequest, ImageComposeResponse, VideoGenerationRequest, VideoGenerationResponse, VideoStatusResponse, APIResponse, ErrorResponse, QuotaExceededResponse };
+// All types are already exported as interfaces above
